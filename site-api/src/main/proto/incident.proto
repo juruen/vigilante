@@ -1,0 +1,28 @@
+package vigilante;
+
+import "team.proto";
+import "service.proto";
+
+option java_package = "io.vigilante";
+option java_outer_classname = "IncidentProtos";
+
+message Incident {
+  optional string id = 1;
+  optional string description = 2;
+  optional int64 start = 3;
+  optional string key = 4;
+  optional Service service = 5;
+  optional Team team = 6;
+
+  enum StateType {
+    RESOLVED = 0;
+    TRIGGERED = 1;
+    ACKNOWLEDGED = 2;
+  }
+
+  optional StateType state = 7;
+}
+
+message Incidents {
+  repeated Incident incident = 1;
+}

@@ -1,0 +1,43 @@
+package io.vigilante.site.impl.datastore.basic;
+
+public class Constants {
+	public static final String USER_KIND = "user";
+	public static final String NOTIFICATION_KIND = "notification";
+	public static final String NAME = "name";
+	public static final String EMAIL = "email";
+	public static final String TIME_ZONE = "time_zone";
+	public static final String START_OFFSET = "start_offset_minutes";
+	public static final String TYPE = "type";
+	public static final String ADDRESS = "contact_address";
+	public static final String ALIAS = "contact_alias";
+	public static final String DETAILS = "contact_details";
+	public static final String USER_ID = "user_id";
+	public static final String TEAM_KIND = "team";
+	public static final String USERS = "users";
+	public static final String SCHEDULE_KIND = "schedule";
+	public static final String TIME_RANGE_KIND = "time_range";
+	public static final String START = "start";
+	public static final String LENGTH = "length";
+	public static final String USER = "user";
+	public static final String LEVEL = "level";
+	public static final String TEAM = "team";
+	public static final String SERVICE_KIND = "service";
+	public static final String SCHEDULE = "schedule";
+	public static final String INCIDENT_LOG_KIND = "incident_log_entry";
+	public static final String INCIDENT_KIND = "incident";
+	public static final String DESCRIPTION = "description";
+	public static final String SERVICE = "service";
+	public static final String STATE = "state";
+	public static final String CREATION_TOKEN = "creation_token";
+	public static final String API_KEY = "api_key";
+	public static final String CREATION_TIME = "creation_time";
+	public static final String SERVICE_ID = "service_id";
+	public static final String TEAM_ID = "team_id";
+	public static final String GOOGLE_SUBJECT = "google_subject";
+	public static final String SESSION_KIND = "session_kind";
+	public static final String EXPIRES = "expires";
+	public static final String INCIDENT_ID = "incident_id";
+	public static final long MAX_ITEMS_PER_PAGE = 100;
+	public static final String OPEN_INCIDENTS_URL = "http://localhost:9090";
+	public static final String INCIDENT_KEY = "incident_key";
+}

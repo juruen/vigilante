@@ -1,0 +1,20 @@
+package vigilante;
+
+option java_package = "io.vigilante";
+option java_outer_classname = "UserOnCallProtos";
+
+import "user.proto";
+
+message UserOnCall {
+  required int64 id = 1;
+  required string name = 2;
+  required string email = 3;
+  required string time_zone = 4;
+  required int32 level = 5;
+
+  repeated User.NotificationRule notifications = 6;
+}
+
+message UsersOnCall {
+  repeated UserOnCall UserOnCall = 1;
+}

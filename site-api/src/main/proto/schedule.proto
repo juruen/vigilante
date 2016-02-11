@@ -1,0 +1,32 @@
+package vigilante;
+
+import "team.proto";
+import "user.proto";
+
+option java_package = "io.vigilante";
+option java_outer_classname = "ScheduleProtos";
+
+message Schedule {
+  optional int64 id = 1;
+  optional Team team = 2;
+  optional string name = 3;
+  optional int64 start = 4;
+  optional int64 length = 5;
+
+  message TimeRange {
+    required int64 start = 1;
+    required int64 length = 2;
+    required User user = 3;
+  }
+
+  message ScheduleLevel {
+    required int32 level = 1;
+    repeated TimeRange time_ranges = 2;
+  }
+
+  repeated ScheduleLevel schedule_levels = 6;
+}
+
+message Schedules {
+  repeated Schedule schedules = 1;
+}

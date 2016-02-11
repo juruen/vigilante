@@ -1,0 +1,19 @@
+package vigilante;
+
+import "team.proto";
+import "schedule.proto";
+
+option java_package = "io.vigilante";
+option java_outer_classname = "ServiceProtos";
+
+message Service {
+  optional int64 id = 1;
+  optional string name = 2;
+  optional string key = 3;
+  optional Team team = 4;
+  optional Schedule schedule = 5;
+}
+
+message Services {
+  repeated Service services = 1;
+}
