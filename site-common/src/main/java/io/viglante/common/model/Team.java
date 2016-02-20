@@ -11,14 +11,14 @@ import java.util.Optional;
 
 @Data
 @Builder
-public class ReadTeam {
+public class Team {
     private final Optional<Long> id;
     private final String name;
-    private final List<User> users;
+    private final List<Long> users;
 
     @JsonCreator
-    public ReadTeam(@JsonProperty("id") Optional<Long> id, @JsonProperty("name") String name,
-                    @JsonProperty("users") List<User> users) {
+    public Team(@JsonProperty("id") Optional<Long> id, @JsonProperty("name") String name,
+                @JsonProperty("users") List<Long> users) {
         this.id = id;
         this.name = name;
         this.users = users;

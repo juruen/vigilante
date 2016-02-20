@@ -7,19 +7,15 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.util.List;
-import java.util.Optional;
 
 @Data
 @Builder
-public class MutateTeam {
-    private final Optional<Long> id;
+public class UpdateTeam {
     private final String name;
     private final List<Long> users;
 
     @JsonCreator
-    public MutateTeam(@JsonProperty("id") Optional<Long> id, @JsonProperty("name") String name,
-                      @JsonProperty("users") List<Long> users) {
-        this.id = id;
+    public UpdateTeam(@JsonProperty("name") String name, @JsonProperty("users") List<Long> users) {
         this.name = name;
         this.users = users;
     }

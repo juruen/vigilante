@@ -40,4 +40,6 @@ public class Constants {
 	public static final long MAX_ITEMS_PER_PAGE = 100;
 	public static final String OPEN_INCIDENTS_URL = "http://localhost:9090";
 	public static final String INCIDENT_KEY = "incident_key";
+	public static final String NOTIFICATION_RULES = "notification_rules";
+	public static final String REF_COUNT = "ref_count";
 }
