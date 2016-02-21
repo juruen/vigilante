@@ -17,7 +17,9 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
-public class DatastoreUserManager {
+import static com.spotify.asyncdatastoreclient.QueryBuilder.asc;
+
+public class DatastoreUserManager implements UserOps {
 
     private final DatastoreWrapper datastore;
 
@@ -27,7 +29,7 @@ public class DatastoreUserManager {
 
     public CompletableFuture<List<User>> getUsers(final @NonNull String namespace) {
         return datastore
-            .exec(QueryBuilder.query().kindOf(Constants.USER_KIND))
+            .exec(QueryBuilder.query().kindOf(Constants.USER_KIND).orderBy(asc(Constants.NAME)))
             .thenApply(this::buildUserList);
     }
 
@@ -55,7 +57,8 @@ public class DatastoreUserManager {
     public CompletableFuture<User> getUser(final @NonNull String namespace, final long id) {
         return datastore
             .exec(QueryBuilder.query(Constants.USER_KIND, id))
-            .thenApply(r -> buildUser(r.getEntity()));
+            .thenApply(Common::entityOrElseThrow)
+            .thenApply(this::buildUser);
     }
 
     public CompletableFuture<MutationStatement> increaseRefCounter(
@@ -82,11 +85,12 @@ public class DatastoreUserManager {
 
         return datastore
             .exec(QueryBuilder.query(key), txn)
-            .thenApply(r ->
+            .thenApply(Common::entityOrElseThrow)
+            .thenApply(e ->
             {
-                final long refCounter = r.getEntity().getInteger(Constants.REF_COUNT) + add;
+                final long refCounter = e.getInteger(Constants.REF_COUNT) + add;
                 final Entity newEntity = Entity
-                    .builder(r.getEntity())
+                    .builder(e)
                     .property(Constants.REF_COUNT, refCounter)
                     .build();
 
@@ -99,8 +103,13 @@ public class DatastoreUserManager {
                                                            QueryResult r) {
         final long refCount = r.getEntity().getInteger(Constants.REF_COUNT);
 
+        final Entity updatedUser = Entity
+            .builder(buildUserEntity(user, refCount))
+            .key(r.getEntity().getKey())
+            .build();
+
         return datastore
-            .exec(QueryBuilder.insert(buildUserEntity(user, refCount)), txn)
+            .exec(QueryBuilder.update(updatedUser), txn)
             .thenAccept(ignored -> {
             });
     }
@@ -122,10 +131,11 @@ public class DatastoreUserManager {
         final Entity.Builder entity = Entity.builder(Constants.USER_KIND)
             .property(Constants.NAME, user.getName())
             .property(Constants.EMAIL, user.getEmail())
+            .property(Constants.TIME_ZONE, user.getTimeZone())
             .property(Constants.REF_COUNT, refCount);
 
         if (!user.getNotifications().isEmpty()) {
-            final List<Entity> notifications = user.getNotifications().stream()
+            final List<Object> notifications = user.getNotifications().stream()
                 .map(this::buildNotificationEntity)
                 .collect(Collectors.toList());
 
@@ -169,11 +179,8 @@ public class DatastoreUserManager {
             .contactAddress(entity.getString(Constants.ADDRESS))
             .contactAlias(entity.getString(Constants.ALIAS))
             .start(entity.getInteger(Constants.START))
+            .contactDetails(Optional.ofNullable(entity.getString(Constants.DETAILS)))
             .type(User.NotificationRule.NotificationType.valueOf(entity.getString(Constants.TYPE)));
-
-        if (entity.contains(Constants.DETAILS)) {
-            rule.contactDetails(Optional.of(entity.getString(Constants.DETAILS)));
-        }
 
         return rule.build();
     }

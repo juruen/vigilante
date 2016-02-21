@@ -14,7 +14,6 @@ import io.vigilante.site.api.exceptions.ReferentialIntegrityException;
 import io.vigilante.site.impl.datastore.basic.Constants;
 import io.viglante.common.model.AddTeam;
 import io.viglante.common.model.Team;
-import io.viglante.common.model.UpdateTeam;
 import lombok.NonNull;
 
 import java.util.ArrayList;
@@ -23,6 +22,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+
+import static com.spotify.asyncdatastoreclient.QueryBuilder.asc;
 
 public class DatastoreTeamManager {
 
@@ -37,7 +38,7 @@ public class DatastoreTeamManager {
 
     public CompletableFuture<List<Team>> getTeams(final @NonNull String namespace) {
         return datastore
-            .exec(QueryBuilder.query().kindOf(Constants.TEAM_KIND))
+            .exec(QueryBuilder.query().kindOf(Constants.TEAM_KIND).orderBy(asc(Constants.NAME)))
             .thenApply(this::buildTeamList);
     }
 
@@ -50,12 +51,13 @@ public class DatastoreTeamManager {
 
     public CompletableFuture<Void> updateTeam(final @NonNull String namespace,
                                               final long id,
-                                              final @NonNull UpdateTeam team) {
+                                              final @NonNull Team team) {
         final CompletableFuture<TransactionResult> txn = datastore.txn();
 
         return datastore
             .exec(QueryBuilder.query(Constants.TEAM_KIND, id), txn)
-            .thenCompose(r -> update(namespace, txn, team, r))
+            .thenApply(Common::entityOrElseThrow)
+            .thenCompose(e -> update(namespace, txn, team, e))
             .thenAccept(ignored -> {
             });
     }
@@ -63,14 +65,16 @@ public class DatastoreTeamManager {
     private CompletableFuture<MutationResult> update(
         String namespace,
         CompletableFuture<TransactionResult> txn,
-        UpdateTeam team,
-        QueryResult queryResult) {
+        Team team,
+        Entity entity) {
         final List<CompletableFuture<MutationStatement>> mutations =
-            getUserRefCountMutations(namespace, txn, team, queryResult);
+            getUserRefCountMutations(namespace, txn, team, entity);
 
         // Add mutation to update team
-        final Entity updatedTeam =
-            buildUpdateTeamEntity(team, queryResult.getEntity().getInteger(Constants.REF_COUNT));
+        final long currentRefCount = entity.getInteger(Constants.REF_COUNT);
+        final Entity updatedTeam = Entity.builder(buildTeamEntity(team, currentRefCount))
+                .key(entity.getKey())
+                .build();
 
         mutations.add(CompletableFuture.completedFuture(QueryBuilder.update(updatedTeam)));
 
@@ -92,11 +96,11 @@ public class DatastoreTeamManager {
     private List<CompletableFuture<MutationStatement>> getUserRefCountMutations(
         String namespace,
         CompletableFuture<TransactionResult> txn,
-        UpdateTeam team,
-        QueryResult queryResult) {
+        Team team,
+        Entity entity) {
         // Figure out users to add and users to remove
         final Set<Long> newUsers = team.getUsers().stream().collect(Collectors.toSet());
-        final Set<Long> currentUsers = Common.getList(queryResult.getEntity(), Constants.USERS)
+        final Set<Long> currentUsers = Common.getList(entity, Constants.USERS)
             .stream().map(Value::getInteger)
             .collect(Collectors.toSet());
 
@@ -121,7 +125,8 @@ public class DatastoreTeamManager {
     public CompletableFuture<Team> getTeam(final @NonNull String namespace, final long id) {
         return datastore
             .exec(QueryBuilder.query(Constants.TEAM_KIND, id))
-            .thenApply(r -> buildTeam(r.getEntity()));
+            .thenApply(Common::entityOrElseThrow)
+            .thenApply(this::buildTeam);
     }
 
     public CompletableFuture<Void> deleteTeam(final @NonNull String namespace,
@@ -138,12 +143,11 @@ public class DatastoreTeamManager {
                         throw new ReferentialIntegrityException("team is being used");
                     }
 
-                    if (!Common.getList(r.getEntity(), Constants.USER).isEmpty()) {
+                    if (!Common.getList(r.getEntity(), Constants.USERS).isEmpty()) {
                         throw new ReferentialIntegrityException("team contains users");
                     }
                 })
-            .thenAcceptBoth(datastore.exec(QueryBuilder.delete(key), txn), (a, b) -> {
-            });
+            .thenAcceptBoth(datastore.exec(QueryBuilder.delete(key), txn), (a, b) -> {});
     }
 
     public CompletableFuture<Batch> increaseRefCounter(
@@ -160,15 +164,14 @@ public class DatastoreTeamManager {
         return Common.increaseRefCounter(namespace, datastore, Constants.TEAM_KIND, id, txn, -1);
     }
 
-    private CompletableFuture<Void> updateTeamSameRefCount(UpdateTeam team,
-                                                           CompletableFuture<TransactionResult> txn,
-                                                           QueryResult r) {
+    private CompletableFuture<Void> teamSameRefCount(Team team,
+                                                     CompletableFuture<TransactionResult> txn,
+                                                     QueryResult r) {
         final long refCount = r.getEntity().getInteger(Constants.REF_COUNT);
 
         return datastore
-            .exec(QueryBuilder.insert(buildUpdateTeamEntity(team, refCount)), txn)
-            .thenAccept(ignored -> {
-            });
+            .exec(QueryBuilder.insert(buildTeamEntity(team, refCount)), txn)
+            .thenAccept(ignored -> {});
     }
 
     private Entity buildTeamEntity(@NonNull AddTeam team, long refCount) {
@@ -179,10 +182,10 @@ public class DatastoreTeamManager {
         return entity.build();
     }
 
-    private Entity buildUpdateTeamEntity(@NonNull UpdateTeam team, long refCount) {
+    private Entity buildTeamEntity(@NonNull Team team, long refCount) {
         final Entity.Builder entity = Entity.builder(Constants.TEAM_KIND)
             .property(Constants.NAME, team.getName())
-            .property(Constants.USERS, team.getUsers())
+            .property(Constants.USERS, Common.toList(team.getUsers()))
             .property(Constants.REF_COUNT, refCount);
 
         return entity.build();

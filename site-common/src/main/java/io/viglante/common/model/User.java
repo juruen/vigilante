@@ -29,6 +29,16 @@ public class User {
         this.notifications = notifications;
     }
 
+    public User.UserBuilder copyBuilder() {
+        return User
+            .builder()
+            .id(id)
+            .name(name)
+            .email(email)
+            .timeZone(timeZone)
+            .notifications(notifications);
+    }
+
     @Data
     @Builder
     public static class NotificationRule {
@@ -56,6 +66,16 @@ public class User {
             this.contactAddress = contactAddress;
             this.contactDetails = contactDetails;
             this.contactAlias = contactAlias;
+        }
+
+        public NotificationRule.NotificationRuleBuilder copyBuilder() {
+            return NotificationRule
+                .builder()
+                .start(start)
+                .type(type)
+                .contactAddress(contactAddress)
+                .contactDetails(contactDetails)
+                .contactAlias(contactAlias);
         }
     }
 }

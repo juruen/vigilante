@@ -9,6 +9,7 @@ import com.spotify.asyncdatastoreclient.MutationResult;
 import com.spotify.asyncdatastoreclient.Query;
 import com.spotify.asyncdatastoreclient.QueryResult;
 import com.spotify.asyncdatastoreclient.TransactionResult;
+import com.spotify.asyncdatastoreclient.Update;
 import com.spotify.futures.CompletableFuturesExtra;
 
 import java.util.concurrent.CompletableFuture;
@@ -59,5 +60,11 @@ public class DatastoreWrapper {
                                                 CompletableFuture<TransactionResult> txn) {
         return CompletableFuturesExtra.toCompletableFuture(
             datastore.executeAsync(batch, CompletableFuturesExtra.toListenableFuture(txn)));
+    }
+
+    public CompletableFuture<MutationResult> exec(Update update,
+                                                CompletableFuture<TransactionResult> txn) {
+        return CompletableFuturesExtra.toCompletableFuture(
+            datastore.executeAsync(update, CompletableFuturesExtra.toListenableFuture(txn)));
     }
 }
