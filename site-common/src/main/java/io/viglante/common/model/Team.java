@@ -3,6 +3,7 @@ package io.viglante.common.model;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.collect.ImmutableList;
 import lombok.Builder;
 import lombok.Data;
 
@@ -21,6 +22,6 @@ public class Team {
                 @JsonProperty("users") List<Long> users) {
         this.id = id;
         this.name = name;
-        this.users = users;
+        this.users = Optional.ofNullable(users).orElse(ImmutableList.<Long>of());
     }
 }

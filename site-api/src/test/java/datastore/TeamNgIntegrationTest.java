@@ -13,7 +13,6 @@ import io.vigilante.site.api.impl.datastoreng.DatastoreUserManager;
 import io.vigilante.site.api.impl.datastoreng.DatastoreUserOps;
 import io.vigilante.site.api.impl.datastoreng.DatastoreWrapper;
 import io.vigilante.site.impl.datastore.basic.Constants;
-import io.viglante.common.model.AddTeam;
 import io.viglante.common.model.Team;
 import io.viglante.common.model.User;
 import org.junit.After;
@@ -64,7 +63,7 @@ public class TeamNgIntegrationTest {
 		resetDatastore();
 
 		userManager = new DatastoreUserManager(datastoreWrapper);
-		teamManager = new DatastoreTeamManager(datastoreWrapper, new DatastoreUserOps(userManager));
+		teamManager = new DatastoreTeamManager(datastoreWrapper, new DatastoreUserOps(userManager, datastoreWrapper));
 
 		userA = User
 			.builder()
@@ -93,7 +92,7 @@ public class TeamNgIntegrationTest {
 		final long userId = userManager.addUser(NAMESPACE, userA).get();
 		userManager.getUser(NAMESPACE, userId).get();
 
-		final AddTeam team = AddTeam.builder().name("team A").build();
+		final Team team = Team.builder().name("team A").build();
 		final long teamId = teamManager.addTeam(NAMESPACE, team).get();
 		final Team addedTeam = teamManager.getTeam(NAMESPACE, teamId).get();
 
@@ -105,7 +104,7 @@ public class TeamNgIntegrationTest {
 		final long userAId = userManager.addUser(NAMESPACE, userA).get();
 		final long userBId = userManager.addUser(NAMESPACE, userB).get();
 
-		final AddTeam team = AddTeam.builder().name("team A").build();
+		final Team team = Team.builder().name("team A").build();
 		final long teamId = teamManager.addTeam(NAMESPACE, team).get();
 		teamManager.getTeam(NAMESPACE, teamId).get();
 
@@ -143,7 +142,7 @@ public class TeamNgIntegrationTest {
 		throws Throwable {
 		final long userId = userManager.addUser(NAMESPACE, userA).get();
 
-		final AddTeam team = AddTeam.builder().name("team A").build();
+		final Team team = Team.builder().name("team A").build();
 		final long teamId = teamManager.addTeam(NAMESPACE, team).get();
 
 		final Team updateTeam = Team
@@ -165,7 +164,7 @@ public class TeamNgIntegrationTest {
     @Test(expected = SiteExternalException.class)
     public void testDeleteTeam()
         throws Throwable {
-        final AddTeam team = AddTeam.builder().name("team A").build();
+        final Team team = Team.builder().name("team A").build();
         final long teamId = teamManager.addTeam(NAMESPACE, team).get();
 
         teamManager.deleteTeam(NAMESPACE, teamId).get();
@@ -182,7 +181,7 @@ public class TeamNgIntegrationTest {
         final long userAId = userManager.addUser(NAMESPACE, userA).get();
         final long userBId = userManager.addUser(NAMESPACE, userB).get();
 
-        final AddTeam team = AddTeam.builder().name("team A").build();
+        final Team team = Team.builder().name("team A").build();
         final long teamId = teamManager.addTeam(NAMESPACE, team).get();
         teamManager.getTeam(NAMESPACE, teamId).get();
 
@@ -236,10 +235,10 @@ public class TeamNgIntegrationTest {
         final long userAId = userManager.addUser(NAMESPACE, userA).get();
         final long userBId = userManager.addUser(NAMESPACE, userB).get();
 
-        final AddTeam teamA = AddTeam.builder().name("team A").build();
+        final Team teamA = Team.builder().name("team A").build();
         final long teamAId = teamManager.addTeam(NAMESPACE, teamA).get();
 
-        final Team updateTeamA = Team
+		final Team updateTeamA = Team
             .builder()
             .id(Optional.of(teamAId))
             .name("team A")
@@ -248,7 +247,7 @@ public class TeamNgIntegrationTest {
 
         teamManager.updateTeam(NAMESPACE, teamAId, updateTeamA).get();
 
-        final AddTeam teamB = AddTeam.builder().name("team B").build();
+        final Team teamB = Team.builder().name("team B").build();
         final long teamBId = teamManager.addTeam(NAMESPACE, teamB).get();
 
         final Team updateTeamB = Team
@@ -260,7 +259,7 @@ public class TeamNgIntegrationTest {
 
         teamManager.updateTeam(NAMESPACE, teamBId, updateTeamB).get();
 
-        final AddTeam teamC = AddTeam.builder().name("team C").build();
+        final Team teamC = Team.builder().name("team C").build();
         final long teamCId = teamManager.addTeam(NAMESPACE, teamC).get();
         final Team updateTeamC = Team
             .builder()

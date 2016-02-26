@@ -20,6 +20,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 public class Common {
+    public static final int MAX_CONCURRENT_TRANSACTIONS = 24;
+
     public static CompletableFuture<Void> deleteEntity(final @NonNull String namespace,
                                                        final String kind,
                                                        final String what,
@@ -69,7 +71,11 @@ public class Common {
     }
 
     public static List<Value> getList(Entity entity, String property) {
-        return Optional.ofNullable(entity.getList(property)).orElse(ImmutableList.of());
+        try {
+            return entity.getList(property);
+        } catch (IllegalArgumentException e) {
+            return ImmutableList.of();
+        }
     }
 
     public static Entity entityOrElseThrow(QueryResult queryResult) {
@@ -81,9 +87,16 @@ public class Common {
     }
 
     public static List<Object> toList(List<?> users) {
-        return users
+        return Optional.ofNullable(users)
+            .flatMap(us ->
+                Optional.of(us.stream().map(e -> (Object) e).collect(Collectors.toList())))
+            .orElse(ImmutableList.of());
+    }
+
+    public static List<Long> getIds(Entity entity, String property) {
+        return Common.getList(entity, property)
             .stream()
-            .map(e -> (Object) e)
+            .map(Value::getInteger)
             .collect(Collectors.toList());
     }
 }

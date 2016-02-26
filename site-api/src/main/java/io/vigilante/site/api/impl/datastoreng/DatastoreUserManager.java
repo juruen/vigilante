@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
 
 import static com.spotify.asyncdatastoreclient.QueryBuilder.asc;
 
-public class DatastoreUserManager implements UserOps {
+public class DatastoreUserManager {
 
     private final DatastoreWrapper datastore;
 
@@ -79,8 +79,8 @@ public class DatastoreUserManager implements UserOps {
         final @NonNull String namespace,
         final long id,
         final @NonNull CompletableFuture<TransactionResult> txn,
-        final long add) {
-
+        final long add)
+    {
         final Key key = Key.builder(Constants.USER_KIND, id).build();
 
         return datastore
@@ -100,7 +100,8 @@ public class DatastoreUserManager implements UserOps {
 
     private CompletableFuture<Void> updateUserSameRefCount(User user,
                                                            CompletableFuture<TransactionResult> txn,
-                                                           QueryResult r) {
+                                                           QueryResult r)
+    {
         final long refCount = r.getEntity().getInteger(Constants.REF_COUNT);
 
         final Entity updatedUser = Entity

@@ -6,12 +6,15 @@ import com.spotify.asyncdatastoreclient.Delete;
 import com.spotify.asyncdatastoreclient.Insert;
 import com.spotify.asyncdatastoreclient.KeyQuery;
 import com.spotify.asyncdatastoreclient.MutationResult;
+import com.spotify.asyncdatastoreclient.MutationStatement;
 import com.spotify.asyncdatastoreclient.Query;
+import com.spotify.asyncdatastoreclient.QueryBuilder;
 import com.spotify.asyncdatastoreclient.QueryResult;
 import com.spotify.asyncdatastoreclient.TransactionResult;
 import com.spotify.asyncdatastoreclient.Update;
 import com.spotify.futures.CompletableFuturesExtra;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -63,8 +66,26 @@ public class DatastoreWrapper {
     }
 
     public CompletableFuture<MutationResult> exec(Update update,
-                                                CompletableFuture<TransactionResult> txn) {
+                                                  CompletableFuture<TransactionResult> txn) {
         return CompletableFuturesExtra.toCompletableFuture(
             datastore.executeAsync(update, CompletableFuturesExtra.toListenableFuture(txn)));
+    }
+
+    public  CompletableFuture<MutationResult> execBatch(
+        String namespace,
+        CompletableFuture<TransactionResult> txn,
+        List<CompletableFuture<MutationStatement>> mutations) {
+        return CompletableFuture
+            .allOf(mutations.toArray(new CompletableFuture[mutations.size()]))
+            .thenCompose(ignored -> {
+                final Batch batch = QueryBuilder.batch();
+
+                mutations
+                    .stream()
+                    .map(CompletableFuture::join)
+                    .forEach(batch::add);
+
+                return exec(batch, txn);
+            });
     }
 }
