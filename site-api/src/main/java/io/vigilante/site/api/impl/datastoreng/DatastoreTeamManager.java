@@ -61,8 +61,7 @@ public class DatastoreTeamManager {
     public CompletableFuture<Team> getTeam(final @NonNull String namespace, final long id) {
         return datastore
             .exec(QueryBuilder.query(Constants.TEAM_KIND, id))
-            .thenApply(Common::entityOrElseThrow)
-            .thenApply(this::buildTeam);
+            .thenApply(r -> buildTeam(Common.entityOrElseThrow(r)));
     }
 
     public CompletableFuture<Void> deleteTeam(final @NonNull String namespace,
@@ -73,7 +72,7 @@ public class DatastoreTeamManager {
 
         return datastore
             .exec(QueryBuilder.query(key), txn)
-            .thenAccept(
+            .thenCompose(
                 r -> {
                     if (r.getEntity().getInteger(Constants.REF_COUNT) != 0) {
                         throw new ReferentialIntegrityException("team is being used");
@@ -82,10 +81,11 @@ public class DatastoreTeamManager {
                     if (!Common.getList(r.getEntity(), Constants.USERS).isEmpty()) {
                         throw new ReferentialIntegrityException("team contains users");
                     }
-                })
-            .thenCompose(ignored -> datastore.exec(QueryBuilder.delete(key), txn))
-            .thenAccept(ignored -> {
-            });
+
+                    return datastore
+                        .exec(QueryBuilder.delete(key), txn)
+                        .thenAccept(ignored -> {});
+                });
     }
 
     public CompletableFuture<Batch> increaseRefCounter(
@@ -109,8 +109,7 @@ public class DatastoreTeamManager {
 
         return datastore
             .exec(QueryBuilder.insert(buildTeamEntity(team, Optional.of(refCount))), txn)
-            .thenAccept(ignored -> {
-            });
+            .thenAccept(ignored -> {});
     }
 
     private Entity buildTeamEntity(Team team, Optional<Long> refCount) {

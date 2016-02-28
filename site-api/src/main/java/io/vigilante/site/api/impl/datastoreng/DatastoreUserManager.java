@@ -57,8 +57,7 @@ public class DatastoreUserManager {
     public CompletableFuture<User> getUser(final @NonNull String namespace, final long id) {
         return datastore
             .exec(QueryBuilder.query(Constants.USER_KIND, id))
-            .thenApply(Common::entityOrElseThrow)
-            .thenApply(this::buildUser);
+            .thenApply(r -> buildUser(Common.entityOrElseThrow(r)));
     }
 
     public CompletableFuture<MutationStatement> increaseRefCounter(

@@ -22,9 +22,9 @@ public interface UserIntegrity {
         Entity updateEntity);
 
     List<CompletableFuture<MutationStatement>> buildUpdateMutations(
+        CompletableFuture<TransactionResult> txn,
         String namespace,
         List<Long> newUsers,
-        CompletableFuture<TransactionResult> txn,
         Entity currentEntity,
         Entity newEntity);
 

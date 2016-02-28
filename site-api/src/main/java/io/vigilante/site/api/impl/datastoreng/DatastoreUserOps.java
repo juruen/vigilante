@@ -50,19 +50,23 @@ public class DatastoreUserOps implements UserIntegrity {
 
         return datastore
             .exec(QueryBuilder.query(entityKind, id), txn)
-            .thenApply(r -> {
+            .thenCompose(r -> {
                 final Entity entity = Common.entityOrElseThrow(r);
-                return buildUpdateMutations(namespace, newUsers, txn, entity, updateEntity);
-            })
-            .thenCompose(m -> datastore.execBatch(namespace, txn, m))
-            .thenAccept(ignored -> {});
+
+                final List<CompletableFuture<MutationStatement>> mutations =
+                    buildUpdateMutations(txn, namespace, newUsers, entity, updateEntity);
+
+                return datastore
+                    .execBatch(namespace, txn, mutations)
+                    .thenAccept(ignored -> {});
+            });
     }
 
     @Override
     public List<CompletableFuture<MutationStatement>> buildUpdateMutations(
+        CompletableFuture<TransactionResult> txn,
         String namespace,
         List<Long> newUsers,
-        CompletableFuture<TransactionResult> txn,
         Entity currentEntity,
         Entity newEntity)
     {
@@ -100,7 +104,8 @@ public class DatastoreUserOps implements UserIntegrity {
         String namespace,
         CompletableFuture<TransactionResult> txn,
         final List<Long> previousUsers,
-        final List<Long> currentUsers) {
+        final List<Long> currentUsers)
+    {
         final Set<Long> previous = Sets.newHashSet(previousUsers.iterator());
         final Set<Long> current = Sets.newHashSet(currentUsers.iterator());
 
