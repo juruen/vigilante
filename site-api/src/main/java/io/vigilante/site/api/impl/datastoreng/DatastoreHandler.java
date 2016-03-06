@@ -6,7 +6,7 @@ import com.spotify.asyncdatastoreclient.Entity;
 import com.spotify.asyncdatastoreclient.Key;
 import com.spotify.asyncdatastoreclient.QueryBuilder;
 import com.spotify.asyncdatastoreclient.TransactionResult;
-import io.vigilante.site.api.exceptions.SiteExternalException;
+import io.vigilante.site.api.exceptions.ReferentialIntegrityException;
 import io.vigilante.site.impl.datastore.basic.Constants;
 
 import java.util.ArrayList;
@@ -97,7 +97,7 @@ public class DatastoreHandler {
                 final Entity storedEntity = Common.entityOrElseThrow(r);
 
                 if (entityInUse(descriptor, storedEntity)) {
-                    throw new SiteExternalException("entity in use");
+                    throw new ReferentialIntegrityException("entity in use");
                 }
 
                 return datastore

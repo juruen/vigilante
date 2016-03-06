@@ -1,4 +1,4 @@
-package datastore;
+package io.vigilante.site.api.impl.datastoreng;
 
 import com.google.common.collect.ImmutableList;
 import com.spotify.asyncdatastoreclient.Datastore;
@@ -6,18 +6,26 @@ import com.spotify.asyncdatastoreclient.DatastoreConfig;
 import com.spotify.asyncdatastoreclient.Entity;
 import com.spotify.asyncdatastoreclient.Query;
 import com.spotify.asyncdatastoreclient.QueryBuilder;
-import io.vigilante.site.api.impl.datastoreng.DatastoreTeamManager;
-import io.vigilante.site.api.impl.datastoreng.DatastoreUserManager;
-import io.vigilante.site.api.impl.datastoreng.DatastoreUserOps;
-import io.vigilante.site.api.impl.datastoreng.DatastoreWrapper;
+import io.vigilante.site.api.exceptions.ReferentialIntegrityException;
+import io.vigilante.site.api.exceptions.SiteExternalException;
 import io.vigilante.site.impl.datastore.basic.Constants;
+import io.viglante.common.model.Team;
 import io.viglante.common.model.User;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.Timeout;
 
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+
+import static junit.framework.TestCase.fail;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
 
 public class TeamNgIntegrationTest {
 
@@ -28,8 +36,6 @@ public class TeamNgIntegrationTest {
 	public static final String DATASET_ID = System.getProperty("dataset", "test");
 	public static final String NAMESPACE = System.getProperty("namespace", "test");
 
-	public static final int TIMEOUT = 5;
-
 	protected static Datastore datastore;
 	protected static DatastoreUserManager userManager;
 	protected static DatastoreTeamManager teamManager;
@@ -39,18 +45,25 @@ public class TeamNgIntegrationTest {
 
 	protected static User userA;
 	protected static User userB;
-	protected static User userC;
-
 
 	@Before
 	public void setUp() throws Exception {
 		datastore = Datastore.create(datastoreConfig());
-		DatastoreWrapper datastoreWrapper = new DatastoreWrapper(datastore);
-
 		resetDatastore();
 
-//		userManager = new DatastoreUserManager(datastoreWrapper);
-		teamManager = new DatastoreTeamManager(datastoreWrapper, new DatastoreUserOps(userManager, datastoreWrapper));
+		DatastoreWrapper datastoreWrapper = new DatastoreWrapper(datastore);
+
+		final Relations relations = Relations.builder()
+			.addRelation(EntityDescriptor.TEAM, EntityDescriptor.USER)
+			.build();
+
+		RelationManager relationManger = new RelationManager(relations, datastoreWrapper);
+
+		DatastoreHandler handler = new DatastoreHandler(datastoreWrapper, relationManger);
+
+		userManager = new DatastoreUserManager(handler);
+
+		teamManager = new DatastoreTeamManager(handler);
 
 		userA = User
 			.builder()
@@ -73,26 +86,24 @@ public class TeamNgIntegrationTest {
 	@After
 	public void tearDown() throws Exception {
 	}
-/*
-	@Test
-	public void testAddTeam() throws InterruptedException, ExecutionException, TimeoutException {
-		final String userId = userManager.addUser(NAMESPACE, userA).get();
-		userManager.getUser(NAMESPACE, userId).get();
 
-		final Team team = Team.builder().name("team A").build();
-		final long teamId = teamManager.addTeam(NAMESPACE, team).get();
+	@Test
+	public void testAddTeam() throws Exception{
+		final String userId = userManager.addUser(NAMESPACE, userA).get();
+		final Team team = Team.builder().name("team A").users(ImmutableList.of(userId)).build();
+		final String teamId = teamManager.addTeam(NAMESPACE, team).get();
 		final Team addedTeam = teamManager.getTeam(NAMESPACE, teamId).get();
 
 		assertEquals("team A", addedTeam.getName());
     }
 
 	@Test
-	public void testUpdateTeam() throws InterruptedException, ExecutionException, TimeoutException {
+	public void testUpdateTeam() throws Exception {
 		final String userAId = userManager.addUser(NAMESPACE, userA).get();
 		final String userBId = userManager.addUser(NAMESPACE, userB).get();
 
 		final Team team = Team.builder().name("team A").build();
-		final long teamId = teamManager.addTeam(NAMESPACE, team).get();
+		final String teamId = teamManager.addTeam(NAMESPACE, team).get();
 		teamManager.getTeam(NAMESPACE, teamId).get();
 
 		final Team updateTeam1 = Team
@@ -106,31 +117,29 @@ public class TeamNgIntegrationTest {
 
 		final Team fetchedUpdateTeam1 = teamManager.getTeam(NAMESPACE, teamId).get();
 
-		assertEquals("team B", fetchedUpdateTeam1.getName());
-		assertEquals(ImmutableList.of(userAId), fetchedUpdateTeam1.getUsers());
-
-		final Team updateTeam2 = Team
+        final Team updateTeam2 = Team
 			.builder()
 			.id(Optional.empty())
 			.name("team B")
 			.users(ImmutableList.of(userBId))
 			.build();
 
-		teamManager.updateTeam(NAMESPACE, teamId, updateTeam2).get();
+        teamManager.updateTeam(NAMESPACE, teamId, updateTeam2).get();
 
-		final Team fetchedUpdateTeam2 = teamManager.getTeam(NAMESPACE, teamId).get();
+        final Team fetchedUpdateTeam2 = teamManager.getTeam(NAMESPACE, teamId).get();
 
+        assertEquals("team B", fetchedUpdateTeam1.getName());
+        assertEquals(ImmutableList.of(userAId), fetchedUpdateTeam1.getUsers());
 		assertEquals("team B", fetchedUpdateTeam2.getName());
 		assertEquals(ImmutableList.of(userBId), fetchedUpdateTeam2.getUsers());
 	}
 
-	@Test(expected = ReferentialIntegrityException.class)
-	public void testDeleteTeamWithUser()
-		throws Throwable {
-		final long userId = userManager.addUser(NAMESPACE, userA).get();
+	@Test(expected = SiteExternalException.class)
+	public void testDeleteTeamWithUser() throws Throwable {
+		final String userId = userManager.addUser(NAMESPACE, userA).get();
 
 		final Team team = Team.builder().name("team A").build();
-		final long teamId = teamManager.addTeam(NAMESPACE, team).get();
+		final String teamId = teamManager.addTeam(NAMESPACE, team).get();
 
 		final Team updateTeam = Team
 			.builder()
@@ -141,35 +150,23 @@ public class TeamNgIntegrationTest {
 
 		teamManager.updateTeam(NAMESPACE, teamId, updateTeam).get();
 
-		try {
-			teamManager.deleteTeam(NAMESPACE, teamId).get();
-		} catch (ExecutionException e) {
-			throw e.getCause();
-		}
-	}
-
-    @Test(expected = SiteExternalException.class)
-    public void testDeleteTeam()
-        throws Throwable {
-        final Team team = Team.builder().name("team A").build();
-        final long teamId = teamManager.addTeam(NAMESPACE, team).get();
-
         teamManager.deleteTeam(NAMESPACE, teamId).get();
 
+        // Should throw exception
         try {
             teamManager.getTeam(NAMESPACE, teamId).get();
         } catch (ExecutionException e) {
             throw e.getCause();
         }
-    }
+	}
 
     @Test(expected = SiteExternalException.class)
     public void testDeleteUserInTeam() throws Throwable {
-        final long userAId = userManager.addUser(NAMESPACE, userA).get();
-        final long userBId = userManager.addUser(NAMESPACE, userB).get();
+        final String userAId = userManager.addUser(NAMESPACE, userA).get();
+        final String userBId = userManager.addUser(NAMESPACE, userB).get();
 
         final Team team = Team.builder().name("team A").build();
-        final long teamId = teamManager.addTeam(NAMESPACE, team).get();
+        final String teamId = teamManager.addTeam(NAMESPACE, team).get();
         teamManager.getTeam(NAMESPACE, teamId).get();
 
         final Team updateTeam1 = Team
@@ -210,20 +207,24 @@ public class TeamNgIntegrationTest {
         }
 
         userManager.deleteUser(NAMESPACE, userAId).get();
-		try {
+
+        // Should throw exception
+        try {
 			userManager.getUser(NAMESPACE, userAId).get();
 		} catch (ExecutionException e) {
 			throw e.getCause();
 		}
     }
 
+
+
 	@Test
-    public void testGetTeams() throws InterruptedException, ExecutionException, TimeoutException {
-        final long userAId = userManager.addUser(NAMESPACE, userA).get();
-        final long userBId = userManager.addUser(NAMESPACE, userB).get();
+    public void testGetTeams() throws Exception {
+        final String userAId = userManager.addUser(NAMESPACE, userA).get();
+        final String userBId = userManager.addUser(NAMESPACE, userB).get();
 
         final Team teamA = Team.builder().name("team A").build();
-        final long teamAId = teamManager.addTeam(NAMESPACE, teamA).get();
+        final String teamAId = teamManager.addTeam(NAMESPACE, teamA).get();
 
 		final Team updateTeamA = Team
             .builder()
@@ -235,7 +236,7 @@ public class TeamNgIntegrationTest {
         teamManager.updateTeam(NAMESPACE, teamAId, updateTeamA).get();
 
         final Team teamB = Team.builder().name("team B").build();
-        final long teamBId = teamManager.addTeam(NAMESPACE, teamB).get();
+        final String teamBId = teamManager.addTeam(NAMESPACE, teamB).get();
 
         final Team updateTeamB = Team
             .builder()
@@ -247,7 +248,7 @@ public class TeamNgIntegrationTest {
         teamManager.updateTeam(NAMESPACE, teamBId, updateTeamB).get();
 
         final Team teamC = Team.builder().name("team C").build();
-        final long teamCId = teamManager.addTeam(NAMESPACE, teamC).get();
+        final String teamCId = teamManager.addTeam(NAMESPACE, teamC).get();
         final Team updateTeamC = Team
             .builder()
             .id(Optional.of(teamCId))
@@ -259,7 +260,6 @@ public class TeamNgIntegrationTest {
 
         assertEquals(ImmutableList.of(updateTeamA, updateTeamB, updateTeamC), teams);
     }
-*/
 
 	private DatastoreConfig datastoreConfig() {
 		final DatastoreConfig.Builder config = DatastoreConfig

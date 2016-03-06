@@ -13,15 +13,15 @@ import java.util.Optional;
 @Data
 @Builder
 public class Team {
-    private final Optional<Long> id;
+    private final Optional<String> id;
     private final String name;
-    private final List<Long> users;
+    private final List<String> users;
 
     @JsonCreator
-    public Team(@JsonProperty("id") Optional<Long> id, @JsonProperty("name") String name,
-                @JsonProperty("users") List<Long> users) {
+    public Team(@JsonProperty("id") Optional<String> id, @JsonProperty("name") String name,
+                @JsonProperty("users") List<String> users) {
         this.id = id;
         this.name = name;
-        this.users = Optional.ofNullable(users).orElse(ImmutableList.<Long>of());
+        this.users = Optional.ofNullable(users).orElse(ImmutableList.<String>of());
     }
 }

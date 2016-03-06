@@ -1,12 +1,6 @@
 package io.vigilante.site.api.impl.datastoreng;
 
-import com.spotify.asyncdatastoreclient.Batch;
 import com.spotify.asyncdatastoreclient.Entity;
-import com.spotify.asyncdatastoreclient.Key;
-import com.spotify.asyncdatastoreclient.QueryBuilder;
-import com.spotify.asyncdatastoreclient.QueryResult;
-import com.spotify.asyncdatastoreclient.TransactionResult;
-import io.vigilante.site.api.exceptions.ReferentialIntegrityException;
 import io.vigilante.site.impl.datastore.basic.Constants;
 import io.viglante.common.model.Team;
 import lombok.NonNull;
@@ -14,125 +8,58 @@ import lombok.NonNull;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
-
-import static com.spotify.asyncdatastoreclient.QueryBuilder.asc;
 
 public class DatastoreTeamManager {
+    private final static EntityDescriptor DESCRIPTOR = EntityDescriptor.TEAM;
 
-    private final DatastoreWrapper datastore;
-    private final UserIntegrity userOps;
+    private final DatastoreHandler datastore;
 
-    public DatastoreTeamManager(final DatastoreWrapper datastore, final UserIntegrity userOps) {
+    public DatastoreTeamManager(DatastoreHandler datastore) {
         this.datastore = datastore;
-        this.userOps = userOps;
     }
 
     public CompletableFuture<List<Team>> getTeams(final @NonNull String namespace) {
-        return datastore
-            .exec(QueryBuilder
-                .query()
-                .kindOf(Constants.TEAM_KIND)
-                .orderBy(asc(Constants.NAME)))
-            .thenApply(this::buildTeamList);
+        return datastore.fetchEntities(namespace, DESCRIPTOR, this::entityToTeam);
     }
 
-    public CompletableFuture<Long> addTeam(final @NonNull String namespace,
-                                           final @NonNull Team team)
+    public CompletableFuture<String> addTeam(
+        final @NonNull String namespace, final @NonNull Team team
+    ) {
+        return datastore.addEntity(namespace, DESCRIPTOR, teamToEntity(team));
+    }
+
+    public CompletableFuture<Void> updateTeam(
+        final @NonNull String namespace, final String id, final @NonNull Team team)
     {
-        final Entity addEntity = buildTeamEntity(team, Optional.of(0L));
-        final List<Long> newUsers = team.getUsers();
-
-        return userOps.inertEntityWithUsers(namespace, addEntity, newUsers);
+        return datastore.updateEntity(namespace, DESCRIPTOR, id, teamToEntity(team));
     }
 
-    public CompletableFuture<Void> updateTeam(final @NonNull String namespace,
-                                              final long id,
-                                              final @NonNull Team team) {
-
-        final String entityKind = Constants.TEAM_KIND;
-        final List<Long> newUsers = team.getUsers();
-        final Entity updateEntity = buildTeamEntity(team, Optional.empty());
-
-        return userOps.updateEntityWithUsers(namespace, id, entityKind, newUsers, updateEntity);
+    public CompletableFuture<Void> deleteTeam(
+        final @NonNull String namespace, final String id)
+    {
+        return datastore.deleteEntity(namespace, DESCRIPTOR, id);
     }
 
-
-    public CompletableFuture<Team> getTeam(final @NonNull String namespace, final long id) {
-        return datastore
-            .exec(QueryBuilder.query(Constants.TEAM_KIND, id))
-            .thenApply(r -> buildTeam(Common.entityOrElseThrow(r)));
-    }
-
-    public CompletableFuture<Void> deleteTeam(final @NonNull String namespace,
-                                              final long id) {
-        final CompletableFuture<TransactionResult> txn = datastore.txn();
-
-        final Key key = Key.builder(Constants.TEAM_KIND, id).build();
-
-        return datastore
-            .exec(QueryBuilder.query(key), txn)
-            .thenCompose(
-                r -> {
-                    if (r.getEntity().getInteger(Constants.REF_COUNT) != 0) {
-                        throw new ReferentialIntegrityException("team is being used");
-                    }
-
-                    if (!Common.getList(r.getEntity(), Constants.USERS).isEmpty()) {
-                        throw new ReferentialIntegrityException("team contains users");
-                    }
-
-                    return datastore
-                        .exec(QueryBuilder.delete(key), txn)
-                        .thenAccept(ignored -> {});
-                });
-    }
-
-    public CompletableFuture<Batch> increaseRefCounter(
+    public CompletableFuture<Team> getTeam(
         final @NonNull String namespace,
-        final long id,
-        final @NonNull CompletableFuture<TransactionResult> txn) {
-        return Common.increaseRefCounter(namespace, datastore, Constants.TEAM_KIND, id, txn, 1);
+        final String id)
+    {
+        return datastore.fetchEntity(namespace, DESCRIPTOR, id, this::entityToTeam);
     }
 
-    public CompletableFuture<Batch> decreaseRefCounter(
-        final @NonNull String namespace,
-        final long id,
-        final @NonNull CompletableFuture<TransactionResult> txn) {
-        return Common.increaseRefCounter(namespace, datastore, Constants.TEAM_KIND, id, txn, -1);
-    }
-
-    private CompletableFuture<Void> teamSameRefCount(Team team,
-                                                     CompletableFuture<TransactionResult> txn,
-                                                     QueryResult r) {
-        final long refCount = r.getEntity().getInteger(Constants.REF_COUNT);
-
-        return datastore
-            .exec(QueryBuilder.insert(buildTeamEntity(team, Optional.of(refCount))), txn)
-            .thenAccept(ignored -> {});
-    }
-
-    private Entity buildTeamEntity(Team team, Optional<Long> refCount) {
-        final Entity.Builder entity = Entity.builder(Constants.TEAM_KIND)
+    private Entity teamToEntity(Team team) {
+        final Entity.Builder entity = Entity.builder()
             .property(Constants.NAME, team.getName())
-            .property(Constants.USERS, Common.toList(team.getUsers()));
-
-        refCount.ifPresent(c -> entity.property(Constants.REF_COUNT, c));
+            .property(EntityDescriptor.USER.ids(), Common.toList(team.getUsers()));
 
         return entity.build();
     }
 
-    private List<Team> buildTeamList(QueryResult result) {
-        return result.getAll().stream()
-            .map(this::buildTeam)
-            .collect(Collectors.toList());
-    }
-
-    private Team buildTeam(Entity entity) {
+    private Team entityToTeam(Entity entity) {
         return Team.builder()
-            .id(Optional.of(entity.getKey().getId()))
+            .id(Optional.of(entity.getKey().getName()))
             .name(entity.getString(Constants.NAME))
-            .users(Common.getIds(entity, Constants.USERS))
+            .users(Common.getStringList(entity, EntityDescriptor.USER.ids()))
             .build();
     }
 }
