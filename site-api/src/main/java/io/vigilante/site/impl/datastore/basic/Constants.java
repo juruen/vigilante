@@ -42,4 +42,5 @@ public class Constants {
 	public static final String INCIDENT_KEY = "incident_key";
 	public static final String NOTIFICATION_RULES = "notification_rules";
 	public static final String REF_COUNT = "ref_count";
+	public static final String ESCLATION_KIND = "escalation";
 }

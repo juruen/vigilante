@@ -59,6 +59,12 @@ public class DatastoreWrapper {
             datastore.executeAsync(query, CompletableFuturesExtra.toListenableFuture(txn)));
     }
 
+    public CompletableFuture<QueryResult> exec(List<KeyQuery> queries,
+                                               CompletableFuture<TransactionResult> txn) {
+        return CompletableFuturesExtra.toCompletableFuture(
+            datastore.executeAsync(queries, CompletableFuturesExtra.toListenableFuture(txn)));
+    }
+
     public CompletionStage<MutationResult> exec(Batch batch,
                                                 CompletableFuture<TransactionResult> txn) {
         return CompletableFuturesExtra.toCompletableFuture(

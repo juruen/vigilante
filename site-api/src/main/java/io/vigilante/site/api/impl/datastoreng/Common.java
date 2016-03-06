@@ -15,6 +15,7 @@ import io.vigilante.site.impl.datastore.basic.Constants;
 import lombok.NonNull;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -72,7 +73,7 @@ public class Common {
 
     public static List<Value> getList(Entity entity, String property) {
         try {
-            return entity.getList(property);
+            return Optional.ofNullable(entity.getList(property)).orElse(ImmutableList.of());
         } catch (IllegalArgumentException e) {
             return ImmutableList.of();
         }
@@ -94,9 +95,34 @@ public class Common {
     }
 
     public static List<Long> getIds(Entity entity, String property) {
-        return Common.getList(entity, property)
+        return getList(entity, property)
             .stream()
             .map(Value::getInteger)
             .collect(Collectors.toList());
     }
+
+    public static List<String> getStringList(Entity entity, String property) {
+        return Common.getList(entity, property)
+            .stream()
+            .map(Value::getString)
+            .collect(Collectors.toList());
+    }
+
+    public static Map<String, String> getStringMap(Entity entity, String property) {
+        return Optional
+            .ofNullable(entity.getEntity(property))
+            .orElse(Entity.builder().build())
+            .getProperties()
+            .entrySet()
+            .stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, kv -> kv.getValue().getString()));
+    }
+
+    public static Entity toEntity(Map<String, String> map) {
+        final Entity.Builder entity = Entity.builder();
+        map.entrySet().stream().forEach(kv -> entity.property(kv.getKey(), kv.getValue()));
+
+        return entity.build();
+    }
+
 }
