@@ -29,6 +29,10 @@ public class RelationManager {
         this.datastore = datastore;
     }
 
+    public Relations relations() {
+        return relations;
+    }
+
     public CompletableFuture<String> addEntity(
         @NonNull Entity entity,
         @NonNull EntityDescriptor descriptor,

@@ -13,7 +13,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 public class DatastoreUserManager {
-    private static EntityDescriptor DESCRIPTOR = EntityDescriptor.USER;
+    private final static EntityDescriptor DESCRIPTOR = EntityDescriptor.USER;
+
     private final DatastoreHandler datastore;
 
     public DatastoreUserManager(DatastoreHandler datastore) {
@@ -24,22 +25,28 @@ public class DatastoreUserManager {
         return datastore.fetchEntities(namespace, DESCRIPTOR, this::entityToUser);
     }
 
-    public CompletableFuture<String> addUser(final @NonNull String namespace,
-                                             final @NonNull User user) {
+    public CompletableFuture<String> addUser(
+        final @NonNull String namespace, final @NonNull User user
+    ) {
         return datastore.addEntity(namespace, DESCRIPTOR, userToEntity(user));
     }
 
-    public CompletableFuture<Void> updateUser(final @NonNull String namespace,
-                                              final String id,
-                                              final @NonNull User user) {
+    public CompletableFuture<Void> updateUser(
+        final @NonNull String namespace, final String id, final @NonNull User user)
+    {
         return datastore.updateEntity(namespace, DESCRIPTOR, id, userToEntity(user));
     }
 
-    public CompletableFuture<Void> deleteUser(final @NonNull String namespace, final String id) {
+    public CompletableFuture<Void> deleteUser(
+        final @NonNull String namespace, final String id)
+    {
         return datastore.deleteEntity(namespace, DESCRIPTOR, id);
     }
 
-    public CompletableFuture<User> getUser(final @NonNull String namespace, final String id) {
+    public CompletableFuture<User> getUser(
+        final @NonNull String namespace,
+        final String id)
+    {
         return datastore.fetchEntity(namespace, DESCRIPTOR, id, this::entityToUser);
     }
 

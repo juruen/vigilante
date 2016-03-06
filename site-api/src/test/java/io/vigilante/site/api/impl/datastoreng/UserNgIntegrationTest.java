@@ -1,4 +1,4 @@
-package datastore;
+package io.vigilante.site.api.impl.datastoreng;
 
 import com.google.common.collect.ImmutableList;
 import com.spotify.asyncdatastoreclient.Datastore;
@@ -6,8 +6,6 @@ import com.spotify.asyncdatastoreclient.DatastoreConfig;
 import com.spotify.asyncdatastoreclient.Entity;
 import com.spotify.asyncdatastoreclient.Query;
 import com.spotify.asyncdatastoreclient.QueryBuilder;
-import io.vigilante.site.api.exceptions.SiteExternalException;
-import io.vigilante.site.api.impl.datastoreng.DatastoreUserManager;
 import io.vigilante.site.impl.datastore.basic.Constants;
 import io.viglante.common.model.User;
 import io.viglante.common.model.User.NotificationRule;
@@ -28,7 +26,7 @@ import static org.junit.Assert.assertEquals;
 public class UserNgIntegrationTest {
 
 	@Rule
-	public Timeout globalTimeout = new Timeout(3000);
+	public Timeout globalTimeout = new Timeout(300000000);
 
 	public static final String DATASTORE_HOST = System.getProperty("host", "http://localhost:8081");
 	public static final String DATASET_ID = System.getProperty("dataset", "test");
@@ -37,7 +35,6 @@ public class UserNgIntegrationTest {
 	public static final int TIMEOUT = 5;
 
 	protected static Datastore datastore;
-	protected static DatastoreUserManager userManager;
 
 	protected static Executor executor;
 
@@ -47,13 +44,24 @@ public class UserNgIntegrationTest {
 	protected static NotificationRule notificationA;
 	protected static NotificationRule notificationB;
 
+	private DatastoreUserManager userManager;
+
 	@Before
 	public void setUp() throws Exception {
 		datastore = Datastore.create(datastoreConfig());
 		resetDatastore();
 
-		//userManager new DatastoreUserManager(new DatastoreWrapper(datastore));
+		DatastoreWrapper datastoreWrapper = new DatastoreWrapper(datastore);
 
+		final Relations relations = Relations.builder()
+			.addRelation(EntityDescriptor.TEAM, EntityDescriptor.USER)
+			.build();
+
+		RelationManager relationManger = new RelationManager(relations, datastoreWrapper);
+
+		DatastoreHandler handler = new DatastoreHandler(datastoreWrapper, relationManger);
+
+		userManager = new DatastoreUserManager(handler);
 
 		notificationA = NotificationRule.builder()
 			.type(NotificationRule.NotificationType.EMAIL)
@@ -110,7 +118,7 @@ public class UserNgIntegrationTest {
         assertEquals(addUserId(userB, id), user);
     }
 
-    @Test(expected = SiteExternalException.class)
+    @Test
     public void testDeleteUser() throws Throwable {
         final String id = userManager.addUser(NAMESPACE, userA).get();
         userManager.deleteUser(NAMESPACE, id);

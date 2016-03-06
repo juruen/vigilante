@@ -38,10 +38,8 @@ public class Relations {
         }
 
         public RelationsBuilder addRelation(EntityDescriptor from, EntityDescriptor to) {
-            final List<EntityDescriptor> toList = relations.getOrDefault(from, new ArrayList<>());
-            toList.add(to);
-            relations.put(from, toList);
-
+            relations.putIfAbsent(from, new ArrayList<>());
+            relations.get(from).add(to);
             return this;
         }
 
