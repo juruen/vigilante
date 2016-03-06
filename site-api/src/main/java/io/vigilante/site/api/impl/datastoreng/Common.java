@@ -125,4 +125,11 @@ public class Common {
         return entity.build();
     }
 
+    public static boolean hasSameName(Entity entity, String name) {
+        return entity.getString(Constants.NAME).equals(name);
+    }
+
+    public static boolean hasSameName(Entity a, Entity b) {
+        return hasSameName(a, b.getString(Constants.NAME));
+    }
 }

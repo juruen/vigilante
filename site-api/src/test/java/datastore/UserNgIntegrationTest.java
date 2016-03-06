@@ -8,7 +8,6 @@ import com.spotify.asyncdatastoreclient.Query;
 import com.spotify.asyncdatastoreclient.QueryBuilder;
 import io.vigilante.site.api.exceptions.SiteExternalException;
 import io.vigilante.site.api.impl.datastoreng.DatastoreUserManager;
-import io.vigilante.site.api.impl.datastoreng.DatastoreWrapper;
 import io.vigilante.site.impl.datastore.basic.Constants;
 import io.viglante.common.model.User;
 import io.viglante.common.model.User.NotificationRule;
@@ -53,7 +52,7 @@ public class UserNgIntegrationTest {
 		datastore = Datastore.create(datastoreConfig());
 		resetDatastore();
 
-		userManager = new DatastoreUserManager(new DatastoreWrapper(datastore));
+		//userManager new DatastoreUserManager(new DatastoreWrapper(datastore));
 
 
 		notificationA = NotificationRule.builder()
@@ -95,7 +94,7 @@ public class UserNgIntegrationTest {
 
 	@Test
 	public void testAddUser() throws InterruptedException, ExecutionException, TimeoutException {
-		final long id = userManager.addUser(NAMESPACE, userA).get();
+		final String id = userManager.addUser(NAMESPACE, userA).get();
 		final User user = userManager.getUser(NAMESPACE, id).get();
 
         assertEquals(addUserId(userA, id), user);
@@ -103,7 +102,7 @@ public class UserNgIntegrationTest {
 
     @Test
 	public void testUpdateUser() throws InterruptedException, ExecutionException, TimeoutException {
-        final long id = userManager.addUser(NAMESPACE, userA).get();
+        final String id = userManager.addUser(NAMESPACE, userA).get();
         userManager.updateUser(NAMESPACE, id, userB).get();
 
         final User user = userManager.getUser(NAMESPACE, id).get();
@@ -113,7 +112,7 @@ public class UserNgIntegrationTest {
 
     @Test(expected = SiteExternalException.class)
     public void testDeleteUser() throws Throwable {
-        final long id = userManager.addUser(NAMESPACE, userA).get();
+        final String id = userManager.addUser(NAMESPACE, userA).get();
         userManager.deleteUser(NAMESPACE, id);
 
         try {
@@ -125,14 +124,14 @@ public class UserNgIntegrationTest {
 
     @Test
     public void testGetUsers() throws InterruptedException, ExecutionException, TimeoutException {
-        final long idA = userManager.addUser(NAMESPACE, userA).get();
-        final long idB = userManager.addUser(NAMESPACE, userB).get();
+        final String idA = userManager.addUser(NAMESPACE, userA).get();
+        final String idB = userManager.addUser(NAMESPACE, userB).get();
         final List<User> users = userManager.getUsers(NAMESPACE).get();
 
         assertEquals(ImmutableList.of(addUserId(userB, idB), addUserId(userA, idA)), users);
     }
 
-    private User addUserId(User user, long id) {
+    private User addUserId(User user, String id) {
         return user.copyBuilder().id(Optional.of(id)).build();
     }
 

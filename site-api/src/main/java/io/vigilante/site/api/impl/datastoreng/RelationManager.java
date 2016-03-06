@@ -12,6 +12,7 @@ import io.vigilante.site.impl.datastore.basic.Constants;
 import lombok.NonNull;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,7 +40,8 @@ public class RelationManager {
             entity,
             descriptor,
             targets,
-            ImmutableList.of()
+            ImmutableList.of(),
+            false
         );
     }
 
@@ -48,7 +50,8 @@ public class RelationManager {
         @NonNull Entity entity,
         @NonNull EntityDescriptor descriptor,
         @NonNull List<TargetReferences> addTargets,
-        @NonNull List<TargetReferences> delTargets
+        @NonNull List<TargetReferences> delTargets,
+        boolean updateReverseReferences
     ) {
         return update(
             txn,
@@ -56,7 +59,8 @@ public class RelationManager {
             entity,
             descriptor,
             addTargets,
-            delTargets
+            delTargets,
+            updateReverseReferences
         ).thenApply(r -> null);
     }
 
@@ -105,31 +109,148 @@ public class RelationManager {
         Entity entity,
         EntityDescriptor descriptor,
         List<TargetReferences> addTargets,
-        List<TargetReferences> delTargets)
+        List<TargetReferences> delTargets,
+        boolean updateReverseReferences)
     {
         final Key key = getOrGenerateKey(type, entity, descriptor);
-
-        final List<KeyQuery> targetQueries = buildTargetQueries(addTargets, delTargets);
+        final List<KeyQuery> keyQueries = buildKeyQueries(
+            entity, descriptor, addTargets, delTargets, updateReverseReferences);
+        final Set<String> reverseKinds = buildReverseKinds(descriptor);
+        final Set<String> targetKinds = buildTargetKinds(addTargets, delTargets);
         final String name = entity.getString(Constants.NAME);
 
         return datastore
-            .exec(targetQueries, txn)
+            .exec(keyQueries, txn)
             .thenCompose(r ->
             {
-                final SourceReference source = SourceReference
-                    .builder()
-                    .type(type)
-                    .descriptor(descriptor)
-                    .id(key.getName())
-                    .name(name)
-                    .entity(Entity.builder(entity).key(key).build())
-                    .build();
+                final Batch batch = buildTargetBatch(
+                    type, entity, descriptor, addTargets, delTargets, key, name, r, targetKinds);
 
-                final Batch batch = buildMutationBatch(source, addTargets, delTargets, r);
+                if (updateReverseReferences) {
+                    batch.add(buildReverseBatch(entity, descriptor, r, reverseKinds));
+                }
 
-                return datastore.exec(batch, txn)
-                    .thenApply(ignored -> key.getName());
+                return datastore.exec(batch, txn).thenApply(ignored -> key.getName());
             });
+    }
+
+    public Batch buildReverseBatch(
+        Entity entity,
+        EntityDescriptor descriptor,
+        QueryResult result,
+        Set<String> kinds
+    ) {
+        final SourceReference source = SourceReference.builder()
+            .descriptor(descriptor)
+            .id(entity.getKey().getName())
+            .name(entity.getString(Constants.NAME))
+            .build();
+
+        final Batch batch = QueryBuilder.batch();
+
+        result
+            .getAll()
+            .stream()
+            .filter(e -> kinds.contains(e.getKey().getKind()))
+            .forEach(e -> batch.add(QueryBuilder.update(updateReference(source, e, true))));
+
+        return batch;
+    }
+
+    private Set<String> buildTargetKinds(
+        List<TargetReferences> addTargets,
+        List<TargetReferences> delTargets
+    ) {
+        final Set<String> kinds = new HashSet<>();
+
+        addTargets.stream().forEach(t -> kinds.add(t.getDescriptor().kind()));
+        delTargets.stream().forEach(t -> kinds.add(t.getDescriptor().kind()));
+
+        return kinds;
+    }
+
+    private Batch buildTargetBatch(
+        SourceReference.Type type,
+        Entity entity,
+        EntityDescriptor descriptor,
+        List<TargetReferences> addTargets,
+        List<TargetReferences> delTargets,
+        Key key,
+        String name,
+        QueryResult result,
+        Set<String> kinds
+    ) {
+        final SourceReference source = SourceReference
+            .builder()
+            .type(type)
+            .descriptor(descriptor)
+            .id(key.getName())
+            .name(name)
+            .entity(Entity.builder(entity).key(key).build())
+            .build();
+
+        final Set<String> idsToAdd = addTargets
+            .stream()
+            .flatMap(t -> t.getIds().stream())
+            .collect(Collectors.toSet());
+
+        final Set<String> idsToRemove = delTargets
+            .stream()
+            .flatMap(t -> t.getIds().stream())
+            .collect(Collectors.toSet());
+
+        final Batch batch = updateTargets(source, idsToAdd, idsToRemove, result, kinds);
+
+        final Map<String, Map<String, String>> targetNames = getTargetNames(idsToAdd, result);
+        final Entity sourceEntity = updateSource(source, delTargets, targetNames);
+
+        if (source.getType() == SourceReference.Type.ADD) {
+            batch.add(QueryBuilder.insert(sourceEntity));
+        } else {
+            batch.add(QueryBuilder.update(sourceEntity));
+        }
+
+        return batch;
+    }
+
+    private Set<String> buildReverseKinds(EntityDescriptor descriptor) {
+        return relations
+            .getReverseRelationsFor(descriptor)
+            .stream()
+            .map(EntityDescriptor::kind)
+            .collect(Collectors.toSet());
+    }
+
+    private List<KeyQuery> buildKeyQueries(
+        Entity entity,
+        EntityDescriptor descriptor,
+        List<TargetReferences> addTargets,
+        List<TargetReferences> delTargets,
+        boolean updateReverseReferences
+    ) {
+        final List<KeyQuery> keyQueries = buildTargetQueries(addTargets, delTargets);
+
+        if (updateReverseReferences) {
+            keyQueries.addAll(buildReverseQueries(entity, descriptor));
+        }
+
+        return keyQueries;
+    }
+
+    private List<KeyQuery> buildReverseQueries(
+        Entity entity,
+        EntityDescriptor descriptor
+    ) {
+        return relations
+            .getReverseRelationsFor(descriptor)
+            .stream()
+            .flatMap(r ->
+                Common
+                    .getStringList(entity, r.ids())
+                    .stream()
+                    .map(i -> QueryBuilder.query(r.kind(), i))
+            )
+            .collect(Collectors.toList());
     }
 
     private List<KeyQuery> buildTargetQueries(List<TargetReferences> addTargets,
@@ -149,35 +270,6 @@ public class RelationManager {
         } else {
             return entity.getKey();
         }
-    }
-
-    private Batch buildMutationBatch(SourceReference source,
-                                     List<TargetReferences> addTargets,
-                                     List<TargetReferences> delTargets,
-                                     QueryResult result)
-    {
-        final Set<String> idsToAdd = addTargets
-            .stream()
-            .flatMap(t -> t.getIds().stream())
-            .collect(Collectors.toSet());
-
-        final Set<String> idsToRemove = delTargets
-            .stream()
-            .flatMap(t -> t.getIds().stream())
-            .collect(Collectors.toSet());
-
-        final Batch batch = updateTargets(source, idsToAdd, idsToRemove, result);
-
-        final Map<String, Map<String, String>> targetNames = getTargetNames(idsToAdd, result);
-        final Entity sourceEntity = updateSource(source, delTargets, targetNames);
-
-        if (source.getType() == SourceReference.Type.ADD) {
-            batch.add(QueryBuilder.insert(sourceEntity));
-        } else {
-            batch.add(QueryBuilder.update(sourceEntity));
-        }
-
-        return batch;
     }
 
     private Entity updateSource(
@@ -239,11 +331,16 @@ public class RelationManager {
         SourceReference source,
         Set<String> idsToAdd,
         Set<String> idsToRemove,
-        QueryResult result)
+        QueryResult result,
+        Set<String> kinds)
     {
         final Batch batch = QueryBuilder.batch();
 
         for (final Entity entity : result.getAll()) {
+            if (!kinds.contains(entity.getKey().getKind())) {
+                continue;
+            }
+
             if (idsToAdd.contains(entity.getKey().getName())) {
                 batch.add(QueryBuilder.update(updateReference(source, entity, true)));
             } else if (idsToRemove.contains(entity.getKey().getName())) {

@@ -60,13 +60,14 @@ public class RelationManagerTest {
         final Relations relations = Relations.builder()
             .addRelation(EntityDescriptor.TEAM, EntityDescriptor.USER)
             .addRelation(EntityDescriptor.TEAM, EntityDescriptor.ESCALATION)
+            .addRelation(EntityDescriptor.SERVICE, EntityDescriptor.TEAM)
             .build();
 
         relationManger = new RelationManager(relations, datastoreWrapper);
     }
 
     @Test
-    public void testAddTeamWithUseAndEscalation() throws Exception {
+    public void testAddTeamWithUserAndEscalation() throws Exception {
         final Entity team1 = Entity
             .builder(EntityDescriptor.TEAM.kind(), "team1")
             .property("name", "team1")
@@ -127,7 +128,7 @@ public class RelationManagerTest {
     }
 
     @Test
-    public void testAddUpdateTeamWithUser() throws Exception {
+    public void testUpdateTeamWithUser() throws Exception {
         final Entity team1 = Entity
             .builder(EntityDescriptor.TEAM.kind(), "team1")
             .property("name", "team1")
@@ -153,7 +154,8 @@ public class RelationManagerTest {
             teamEntityTwoUsers,
             EntityDescriptor.TEAM,
             ImmutableList.of(new TargetReferences(EntityDescriptor.USER, "user2")),
-            ImmutableList.of()).get();
+            ImmutableList.of(),
+            false).get();
 
         final Entity storedTeamEntity = datastore
             .execute(QueryBuilder.query(EntityDescriptor.TEAM.kind(), teamId))
@@ -195,6 +197,101 @@ public class RelationManagerTest {
     }
 
     @Test
+    public void testUpdateTeamWithUserAndService() throws Exception {
+        final Entity team1 = Entity
+            .builder(EntityDescriptor.TEAM.kind(), "team1")
+            .property("name", "team1")
+            .property(EntityDescriptor.USER.ids(), Common.toList(ImmutableList.of("user1")))
+            .build();
+
+        final String teamId = relationManger.addEntity(
+            team1,
+            EntityDescriptor.TEAM,
+            ImmutableList.of(new TargetReferences(EntityDescriptor.USER, "user1"))).get();
+
+        final Entity service1 = Entity
+            .builder(EntityDescriptor.SERVICE.kind(), "service1")
+            .property("name", "service1")
+            .property(EntityDescriptor.TEAM.ids(), Common.toList(ImmutableList.of(teamId)))
+            .build();
+
+        final String serviceId = relationManger.addEntity(
+            service1,
+            EntityDescriptor.SERVICE,
+            ImmutableList.of(new TargetReferences(EntityDescriptor.TEAM, teamId))).get();
+
+        final Entity teamEntity = datastore
+            .execute(QueryBuilder.query(EntityDescriptor.TEAM.kind(), teamId))
+            .getEntity();
+
+        final Entity teamEntityOtherName = Entity
+            .builder(teamEntity)
+            .property(Constants.NAME, "team11")
+            .property(EntityDescriptor.TEAM.ids(), ImmutableList.of("user1", "user2"))
+            .build();
+
+        relationManger.updateEntity(
+            datastoreWrapper.txn(),
+            teamEntityOtherName,
+            EntityDescriptor.TEAM,
+            ImmutableList.of(
+                new TargetReferences(EntityDescriptor.USER, "user1"),
+                new TargetReferences(EntityDescriptor.USER, "user2")),
+            ImmutableList.of(),
+            true).get();
+
+        final Entity storedTeamEntity = datastore
+            .execute(QueryBuilder.query(EntityDescriptor.TEAM.kind(), teamId))
+            .getEntity();
+
+        final Entity storedUser1Entity = datastore
+            .execute(QueryBuilder.query(EntityDescriptor.USER.kind(), "user1"))
+            .getEntity();
+
+        final Entity storedUser2Entity = datastore
+            .execute(QueryBuilder.query(EntityDescriptor.USER.kind(), "user2"))
+            .getEntity();
+
+        final Entity storedServiceEntity = datastore
+            .execute(QueryBuilder.query(EntityDescriptor.SERVICE.kind(), serviceId))
+            .getEntity();
+
+
+        assertEquals(
+            ImmutableMap.of("user1", "user1", "user2", "user2"),
+            Common.getStringMap(storedTeamEntity, EntityDescriptor.USER.names()));
+
+        assertEquals(
+            ImmutableList.of("user1", "user2"),
+            Common.getStringList(storedTeamEntity, EntityDescriptor.USER.ids()));
+
+        assertEquals(
+            ImmutableMap.of(teamId, "team11"),
+            Common.getStringMap(storedUser1Entity, EntityDescriptor.TEAM.names()));
+
+        assertEquals(
+            ImmutableList.of(teamId),
+            Common.getStringList(storedUser1Entity, EntityDescriptor.TEAM.ids()));
+
+        assertEquals(
+            ImmutableMap.of(teamId, "team11"),
+            Common.getStringMap(storedUser2Entity, EntityDescriptor.TEAM.names()));
+
+        assertEquals(
+            ImmutableList.of(teamId),
+            Common.getStringList(storedUser2Entity, EntityDescriptor.TEAM.ids()));
+
+        assertEquals(
+            ImmutableMap.of(teamId, "team11"),
+            Common.getStringMap(storedServiceEntity, EntityDescriptor.TEAM.names()));
+
+        assertEquals(
+            ImmutableList.of(teamId),
+            Common.getStringList(storedServiceEntity, EntityDescriptor.TEAM.ids()));
+
+    }
+
+    @Test
     public void testAddUpdateTeamRemoveUser() throws Exception {
         final Entity team1 = Entity
             .builder(EntityDescriptor.TEAM.kind(), "team1")
@@ -221,7 +318,8 @@ public class RelationManagerTest {
             teamEntityRemoveUser,
             EntityDescriptor.TEAM,
             ImmutableList.of(new TargetReferences(EntityDescriptor.USER, "user2")),
-            ImmutableList.of(new TargetReferences(EntityDescriptor.USER, "user1"))).get();
+            ImmutableList.of(new TargetReferences(EntityDescriptor.USER, "user1")),
+            false).get();
 
         final Entity storedTeamEntity = datastore
             .execute(QueryBuilder.query(EntityDescriptor.TEAM.kind(), teamId))

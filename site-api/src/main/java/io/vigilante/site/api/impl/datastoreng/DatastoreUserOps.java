@@ -120,11 +120,6 @@ public class DatastoreUserOps implements UserIntegrity {
         // Prepare mutations
         final List<CompletableFuture<MutationStatement>> mutations = new ArrayList<>();
 
-        // Add mutations to increase/decrease ref counter for users
-        toAdd.stream().forEach(
-            u -> mutations.add(userManager.increaseRefCounter(namespace, u, txn)));
-        toRemove.stream().forEach(
-            u -> mutations.add(userManager.decreaseRefCounter(namespace, u, txn)));
 
         return mutations;
     }

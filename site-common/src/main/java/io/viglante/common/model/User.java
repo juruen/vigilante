@@ -12,14 +12,14 @@ import java.util.Optional;
 @Data
 @Builder
 public class User {
-    private final Optional<Long> id;
+    private final Optional<String> id;
     private final String name;
     private final String email;
     private final String timeZone;
     private final List<NotificationRule> notifications;
 
     @JsonCreator
-    public User(@JsonProperty("id") Optional<Long> id, @JsonProperty("name") String name,
+    public User(@JsonProperty("id") Optional<String> id, @JsonProperty("name") String name,
                 @JsonProperty("email") String email, @JsonProperty("timeZone") String timeZone,
                 @JsonProperty("notifications") List<NotificationRule> notifications) {
         this.id = id;

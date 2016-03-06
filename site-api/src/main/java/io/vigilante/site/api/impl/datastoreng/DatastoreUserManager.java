@@ -2,11 +2,6 @@ package io.vigilante.site.api.impl.datastoreng;
 
 import com.google.common.collect.ImmutableList;
 import com.spotify.asyncdatastoreclient.Entity;
-import com.spotify.asyncdatastoreclient.Key;
-import com.spotify.asyncdatastoreclient.MutationStatement;
-import com.spotify.asyncdatastoreclient.QueryBuilder;
-import com.spotify.asyncdatastoreclient.QueryResult;
-import com.spotify.asyncdatastoreclient.TransactionResult;
 import com.spotify.asyncdatastoreclient.Value;
 import io.vigilante.site.impl.datastore.basic.Constants;
 import io.viglante.common.model.User;
@@ -17,104 +12,38 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
-import static com.spotify.asyncdatastoreclient.QueryBuilder.asc;
-
 public class DatastoreUserManager {
+    private static EntityDescriptor DESCRIPTOR = EntityDescriptor.USER;
+    private final DatastoreHandler datastore;
 
-    private final DatastoreWrapper datastore;
-
-    public DatastoreUserManager(final DatastoreWrapper datastore) {
+    public DatastoreUserManager(DatastoreHandler datastore) {
         this.datastore = datastore;
     }
 
     public CompletableFuture<List<User>> getUsers(final @NonNull String namespace) {
-        return datastore
-            .exec(QueryBuilder.query().kindOf(Constants.USER_KIND).orderBy(asc(Constants.NAME)))
-            .thenApply(this::buildUserList);
+        return datastore.fetchEntities(namespace, DESCRIPTOR, this::entityToUser);
     }
 
-    public CompletableFuture<Long> addUser(final @NonNull String namespace,
-                                           final @NonNull User user) {
-        return datastore
-            .exec(QueryBuilder.insert(buildUserEntity(user, 0)))
-            .thenApply(r -> r.getInsertKey().getId());
+    public CompletableFuture<String> addUser(final @NonNull String namespace,
+                                             final @NonNull User user) {
+        return datastore.addEntity(namespace, DESCRIPTOR, userToEntity(user));
     }
 
     public CompletableFuture<Void> updateUser(final @NonNull String namespace,
-                                              final long id,
+                                              final String id,
                                               final @NonNull User user) {
-        final CompletableFuture<TransactionResult> txn = datastore.txn();
-
-        return datastore
-            .exec(QueryBuilder.query(Constants.USER_KIND, id), txn)
-            .thenCompose(r -> updateUserSameRefCount(user, txn, r));
+        return datastore.updateEntity(namespace, DESCRIPTOR, id, userToEntity(user));
     }
 
-    public CompletableFuture<Void> deleteUser(final @NonNull String namespace, final long id) {
-        return Common.deleteEntity(namespace, Constants.USER_KIND, "user", id, datastore);
+    public CompletableFuture<Void> deleteUser(final @NonNull String namespace, final String id) {
+        return datastore.deleteEntity(namespace, DESCRIPTOR, id);
     }
 
-    public CompletableFuture<User> getUser(final @NonNull String namespace, final long id) {
-        return datastore
-            .exec(QueryBuilder.query(Constants.USER_KIND, id))
-            .thenApply(r -> buildUser(Common.entityOrElseThrow(r)));
+    public CompletableFuture<User> getUser(final @NonNull String namespace, final String id) {
+        return datastore.fetchEntity(namespace, DESCRIPTOR, id, this::entityToUser);
     }
 
-    public CompletableFuture<MutationStatement> increaseRefCounter(
-        final @NonNull String namespace,
-        final long id,
-        final @NonNull CompletableFuture<TransactionResult> txn) {
-        return increaseRefCounter(namespace, id, txn, 1);
-    }
-
-    public CompletableFuture<MutationStatement> decreaseRefCounter(
-        final @NonNull String namespace,
-        final long id,
-        final @NonNull CompletableFuture<TransactionResult> txn) {
-        return increaseRefCounter(namespace, id, txn, -1);
-    }
-
-    private CompletableFuture<MutationStatement> increaseRefCounter(
-        final @NonNull String namespace,
-        final long id,
-        final @NonNull CompletableFuture<TransactionResult> txn,
-        final long add)
-    {
-        final Key key = Key.builder(Constants.USER_KIND, id).build();
-
-        return datastore
-            .exec(QueryBuilder.query(key), txn)
-            .thenApply(Common::entityOrElseThrow)
-            .thenApply(e ->
-            {
-                final long refCounter = e.getInteger(Constants.REF_COUNT) + add;
-                final Entity newEntity = Entity
-                    .builder(e)
-                    .property(Constants.REF_COUNT, refCounter)
-                    .build();
-
-                return QueryBuilder.update(newEntity);
-            });
-    }
-
-    private CompletableFuture<Void> updateUserSameRefCount(User user,
-                                                           CompletableFuture<TransactionResult> txn,
-                                                           QueryResult r)
-    {
-        final long refCount = r.getEntity().getInteger(Constants.REF_COUNT);
-
-        final Entity updatedUser = Entity
-            .builder(buildUserEntity(user, refCount))
-            .key(r.getEntity().getKey())
-            .build();
-
-        return datastore
-            .exec(QueryBuilder.update(updatedUser), txn)
-            .thenAccept(ignored -> {
-            });
-    }
-
-    private Entity buildNotificationEntity(User.NotificationRule notificationRule) {
+    private Entity notificationToEntity(User.NotificationRule notificationRule) {
         final Entity.Builder entity = Entity.builder();
 
         entity.property(Constants.ADDRESS, notificationRule.getContactAddress())
@@ -127,16 +56,15 @@ public class DatastoreUserManager {
         return entity.build();
     }
 
-    private Entity buildUserEntity(@NonNull User user, long refCount) {
+    private Entity userToEntity(@NonNull User user) {
         final Entity.Builder entity = Entity.builder(Constants.USER_KIND)
             .property(Constants.NAME, user.getName())
             .property(Constants.EMAIL, user.getEmail())
-            .property(Constants.TIME_ZONE, user.getTimeZone())
-            .property(Constants.REF_COUNT, refCount);
+            .property(Constants.TIME_ZONE, user.getTimeZone());
 
         if (!user.getNotifications().isEmpty()) {
             final List<Object> notifications = user.getNotifications().stream()
-                .map(this::buildNotificationEntity)
+                .map(this::notificationToEntity)
                 .collect(Collectors.toList());
 
             entity.property(Constants.NOTIFICATION_RULES, notifications);
@@ -145,34 +73,28 @@ public class DatastoreUserManager {
         return entity.build();
     }
 
-    private List<User> buildUserList(QueryResult result) {
-        return result.getAll().stream()
-            .map(this::buildUser)
-            .collect(Collectors.toList());
-    }
-
-    private User buildUser(Entity entity) {
+    private User entityToUser(Entity entity) {
         return User.builder()
-            .id(Optional.of(entity.getKey().getId()))
+            .id(Optional.of(entity.getKey().getName()))
             .email(entity.getString(Constants.EMAIL))
             .name(entity.getString(Constants.NAME))
             .timeZone(entity.getString(Constants.TIME_ZONE))
-            .notifications(buildUserNotifications(entity))
+            .notifications(notificationsToEntity(entity))
             .build();
     }
 
-    private List<User.NotificationRule> buildUserNotifications(Entity entity) {
+    private List<User.NotificationRule> notificationsToEntity(Entity entity) {
         if (entity.contains(Constants.NOTIFICATION_RULES)) {
             final List<Value> notifications = entity.getList(Constants.NOTIFICATION_RULES);
             return notifications.stream()
-                .map(this::buildUserNotification)
+                .map(this::notificationToEntity)
                 .collect(Collectors.toList());
         } else {
             return ImmutableList.of();
         }
     }
 
-    private User.NotificationRule buildUserNotification(Value value) {
+    private User.NotificationRule notificationToEntity(Value value) {
         final Entity entity = value.getEntity();
 
         final User.NotificationRule.NotificationRuleBuilder rule = User.NotificationRule.builder()
